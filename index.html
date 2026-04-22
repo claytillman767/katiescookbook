@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Katie's Digital Recipe Book</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
+
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    h1,h2,h3,h4 { font-family: 'Playfair Display', serif; }
+    .recipe-content { display: none; }
+    .recipe-content.active { display: block; }
+    .recipe-meta {
+      display:flex; justify-content:center; flex-wrap:wrap;
+      gap:1.5rem; margin-top:.5rem; margin-bottom:1rem; color:#57534e;
+    }
+    .recipe-meta span { font-weight:600; }
+    /* --- NEW CAROUSEL STYLES --- */
+    .carousel-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0.25rem;
+      background-color: #f5f5f4; /* stone-100 */
+      border-bottom: 1px solid #e7e5e4; /* stone-200 */
+    }
+    .carousel-btn {
+      padding: 0.25rem 0.75rem;
+      background-color: #a8a29e; /* stone-400 */
+      color: white;
+      border-radius: 0.25rem;
+      font-size: 0.9rem;
+    }
+    .carousel-btn:hover {
+      background-color: #78716c; /* stone-500 */
+    }
+    .carousel-btn:disabled {
+      background-color: #d6d3d1; /* stone-300 */
+      cursor: not-allowed;
+    }
+    /* --- END NEW STYLES --- */
+  </style>
+</head>
+<body class="bg-stone-100 text-stone-800">
+
+<!-- Sticky recipe nav bar (hidden until a recipe is open) -->
+<div id="sticky-back-bar" class="hidden fixed top-0 left-0 right-0 z-50 bg-amber-700 text-white px-4 py-2 shadow-md flex items-center justify-between">
+  <button onclick="window.backToTOC()" class="text-sm font-semibold hover:underline whitespace-nowrap">← Back to Contents</button>
+  <span id="sticky-recipe-title" class="text-sm font-medium truncate mx-4 opacity-90"></span>
+  <button onclick="window.scrollTo({top:0,behavior:'smooth'})" class="text-sm font-semibold hover:underline whitespace-nowrap">↑ Top</button>
+</div>
+
+<div class="container mx-auto max-w-4xl p-4 sm:p-8">
+
+  <header class="text-center mb-6 border-b-2 border-stone-300 pb-6">
+    <h1 class="text-4xl sm:text-5xl font-bold text-stone-900">Katie's Digital Recipe Book</h1>
+    <p class="text-stone-600 mt-2">A collection of personal favorites.</p>
+    <button onclick="showMealPlanModal()"
+            class="mt-3 inline-flex items-center gap-2 px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium hover:bg-amber-200 transition-colors">
+      📋 Meal Plan
+      <span id="meal-plan-badge" class="hidden bg-amber-700 text-white rounded-full px-1.5 text-xs font-bold"></span>
+    </button>
+  </header>
+
+  <div class="mb-10">
+    <input type="search" id="search-input" placeholder="Search by recipe or ingredient..."
+           class="w-full p-4 border border-stone-300 rounded-lg shadow-sm focus:ring-amber-500 focus:border-amber-500 transition-shadow duration-300"
+           onkeyup="debouncedSearch()"/>
+    <div class="mt-3 text-center">
+      <button onclick="showRandomRecipeModal()"
+              class="px-4 py-2 bg-amber-600 text-white rounded-lg shadow-sm hover:bg-amber-700 transition-colors text-sm font-medium">
+        🎲 Random Recipe
+      </button>
+    </div>
+  </div>
+
+  <div id="table-of-contents" class="bg-white p-6 sm:p-8 rounded-lg shadow-md mb-10">
+    <h2 class="text-3xl font-bold mb-2 text-center">Table of Contents</h2>
+    <p id="status-line" class="text-center text-xs text-stone-500 mb-4"></p>
+    
+    <div id="toc-controls" class="text-center mb-6 space-x-2">
+      <button onclick="toggleAllCategories(true)"
+              class="px-3 py-1 bg-amber-600 text-white rounded shadow-sm hover:bg-amber-700 transition-colors text-sm">
+        Expand All
+      </button>
+      <button onclick="toggleAllCategories(false)"
+              class="px-3 py-1 bg-stone-500 text-white rounded shadow-sm hover:bg-stone-600 transition-colors text-sm">
+        Collapse All
+      </button>
+    </div>
+    <div id="toc-content"></div>
+  </div>
+
+  <main id="recipe-display" class="space-y-12"></main>
+
+  <!-- Meal Plan Modal -->
+  <div id="meal-plan-modal" class="hidden fixed inset-0 z-50 flex items-start justify-center pt-16 px-4">
+    <div class="absolute inset-0 bg-black/50" onclick="closeMealPlanModal()"></div>
+    <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-2xl font-bold">Meal Plan</h2>
+        <button onclick="closeMealPlanModal()" class="text-stone-400 hover:text-stone-700 text-3xl leading-none">&times;</button>
+      </div>
+      <div id="meal-plan-content"></div>
+      <div class="mt-4 flex gap-2 justify-between items-center border-t pt-4 flex-wrap gap-y-2">
+        <button onclick="clearMealPlan()" class="px-3 py-1.5 bg-stone-200 text-stone-700 rounded hover:bg-stone-300 text-sm">Clear All</button>
+        <div class="flex gap-2">
+          <button id="copy-shopping-btn" onclick="copyShoppingList()"
+                  class="px-3 py-1.5 bg-stone-700 text-white rounded hover:bg-stone-800 text-sm">Copy Shopping List</button>
+          <button onclick="closeMealPlanModal()" class="px-3 py-1.5 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Changelog Modal -->
+  <div id="changelog-modal" class="hidden fixed inset-0 z-50 flex items-start justify-center pt-16 px-4">
+    <div class="absolute inset-0 bg-black/50" onclick="closeChangelogModal()"></div>
+    <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-2xl font-bold">Change Log</h2>
+        <button onclick="closeChangelogModal()" class="text-stone-400 hover:text-stone-700 text-3xl leading-none">&times;</button>
+      </div>
+      <div id="changelog-content"></div>
+      <div class="mt-4 flex justify-end border-t pt-4">
+        <button onclick="closeChangelogModal()" class="px-3 py-1.5 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Random Recipe Modal -->
+  <div id="random-recipe-modal" class="hidden fixed inset-0 z-50 flex items-start justify-center pt-16 px-4">
+    <div class="absolute inset-0 bg-black/50" onclick="closeRandomRecipeModal()"></div>
+    <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto p-6">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-2xl font-bold">Random Recipe</h2>
+        <button onclick="closeRandomRecipeModal()" class="text-stone-400 hover:text-stone-700 text-3xl leading-none">&times;</button>
+      </div>
+      <p class="text-stone-500 text-sm mb-4">Select which categories to include, then press the button.</p>
+      <div class="flex gap-3 mb-3">
+        <button onclick="setAllRandomCategories(true)" class="text-xs text-amber-700 hover:underline">Select All</button>
+        <button onclick="setAllRandomCategories(false)" class="text-xs text-stone-500 hover:underline">Deselect All</button>
+      </div>
+      <div id="random-recipe-categories" class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-6"></div>
+      <div class="flex justify-end border-t pt-4">
+        <button onclick="pickRandomRecipe()"
+                class="px-5 py-2 bg-amber-600 text-white rounded-lg shadow-sm hover:bg-amber-700 transition-colors font-medium">
+          🎲 Random Recipe
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="text-center mt-10 mb-4 text-sm text-stone-500 space-y-1">
+    <div>
+      <a href="https://forms.gle/UvTKwMtEumBYzZit6" target="_blank" rel="noopener noreferrer"
+         class="underline hover:text-amber-700 transition-colors">
+        Request Enhancements
+      </a>
+    </div>
+    <div>
+      <button onclick="showChangelogModal()"
+              class="underline hover:text-amber-700 transition-colors">
+        Change Log
+      </button>
+    </div>
+  </footer>
+</div>
+
+<script>
+  // =====================
+  // Public (no login) — Init + Data Fetch
+  // =====================
+
+  // TODO: After redeploying Code.gs as a JSON API, paste your new deployment URL here.
+  const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwpyyev3uTv49rF5ug7SsHlUpW8dkt0ZVZSHyenbxmy5Lo_Xp5zZMqSOmWdYQUupqzX/exec';
+
+  // =====================
+  // Change Log Data
+  // Update this array (and CHANGELOG.md) whenever changes are made to the site.
+  // Entries are newest-first.
+  // =====================
+  const CHANGELOG = [
+    {
+      date: 'April 22, 2026',
+      title: 'Screenshot View & Random Recipe Button',
+      items: [
+        'Added a "Screenshot View" button on every recipe — opens a clean, phone-friendly popup with a compact two-column layout (ingredients beside instructions) so the Pixel scroll-capture arrow works without freezing',
+      ]
+    },
+    {
+      date: 'April 22, 2026',
+      title: 'Random Recipe Button',
+      items: [
+        'Added a "Random Recipe" button below the search bar',
+        'Opens a screen to pick which categories to include (all selected by default)',
+        'Use "Select All" or "Deselect All" to quickly adjust, then press the button to jump to a random recipe',
+      ]
+    },
+    {
+      date: 'April 16, 2026',
+      title: 'Meal Planner, Navigation & Polish',
+      items: [
+        'Added Meal Planner — build a weekly recipe plan, check off shopping list items as you shop, and copy the remaining list to your clipboard',
+        'Added sticky navigation bar when viewing a recipe: jump back to the Table of Contents or scroll to the top without losing your place',
+        'Recipe categories in the Table of Contents now show a count (e.g. "Desserts (12)")',
+        'Added Request Enhancements link and this Change Log in the footer',
+      ]
+    },
+  ];
+
+  let allRecipesData = {};
+  let currentRecipeId = null;
+  let searchDebounceTimer;
+  window.__recipesInitDone = false;
+
+  document.addEventListener("DOMContentLoaded", () => {
+    try {
+      initializeRecipeBook();
+    } catch (e) {
+      console.error('[BOOT] Failed DOMContentLoaded init:', e);
+    }
+    // Birthday celebration! (July 25–30, any year)
+    const now = new Date();
+    if (now.getMonth() === 6 && now.getDate() >= 25 && now.getDate() <= 30) {
+      const bdayEmojis = ['🎂','🎉','🎈','🎁','🥳','✨','🎊','🍰'];
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;overflow:hidden;';
+      document.body.appendChild(overlay);
+      const count = 50;
+      for (let i = 0; i < count; i++) {
+        const piece = document.createElement('span');
+        piece.textContent = bdayEmojis[Math.floor(Math.random() * bdayEmojis.length)];
+        const size = Math.random() * 2.5 + 1.5;
+        const startX = Math.random() * 100;
+        const delay = Math.random() * 2500;
+        const duration = Math.random() * 2000 + 2000;
+        piece.style.cssText = `position:absolute;font-size:${size}rem;left:${startX}%;top:-10%;opacity:0;transition:opacity 0.3s;`;
+        overlay.appendChild(piece);
+        setTimeout(() => {
+          piece.style.opacity = '1';
+          piece.style.transition = `top ${duration}ms linear, opacity 0.3s`;
+          piece.style.top = '110%';
+        }, delay);
+      }
+      setTimeout(() => overlay.remove(), 6000);
+    }
+
+    // Hedgehog surprise! 1-in-500 chance on any page load.
+    if (Math.random() < 1 / 500) {
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;overflow:hidden;';
+      document.body.appendChild(overlay);
+      const count = 40;
+      for (let i = 0; i < count; i++) {
+        const hog = document.createElement('span');
+        hog.textContent = '🦔';
+        const size = Math.random() * 2.5 + 1.5;
+        const startX = Math.random() * 100;
+        const delay = Math.random() * 2000;
+        const duration = Math.random() * 2000 + 2000;
+        hog.style.cssText = `position:absolute;font-size:${size}rem;left:${startX}%;top:-10%;opacity:0;transition:opacity 0.3s;`;
+        overlay.appendChild(hog);
+        setTimeout(() => {
+          hog.style.opacity = '1';
+          hog.style.transition = `top ${duration}ms linear, opacity 0.3s`;
+          hog.style.top = '110%';
+        }, delay);
+      }
+      setTimeout(() => overlay.remove(), 5000);
+    }
+  });
+
+  function initializeRecipeBook() {
+    if (window.__recipesInitDone) return;
+
+    const statusEl = document.getElementById('status-line');
+    const tocContent = document.getElementById('toc-content');
+    if (statusEl) statusEl.textContent = 'Loading recipes…';
+    if (tocContent) tocContent.innerHTML = '<p class="text-center text-stone-500">Loading recipes from Google Sheet...</p>';
+
+    fetch(GAS_API_URL)
+      .then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.text();
+      })
+      .then((dataFromServer) => {
+        let parsed;
+        try {
+          parsed = JSON.parse(dataFromServer);
+        } catch (e) {
+          if (statusEl) statusEl.textContent = 'Failed to parse recipe data.';
+          return;
+        }
+
+        if (!parsed || parsed.error) {
+          if (statusEl) statusEl.textContent = `Server error: ${parsed?.error ?? 'unknown'}`;
+          return;
+        }
+
+        const keys = Object.keys(parsed);
+        if (keys.length === 0) {
+          if (statusEl) statusEl.textContent = 'Parsed OK but zero recipes (check headers).';
+          return;
+        }
+
+        window.__recipesInitDone = true;
+        allRecipesData = parsed;
+        if (statusEl) statusEl.textContent = `Loaded ${keys.length} recipes.`;
+
+        renderTOC();
+        populateAllRecipes();
+        updateMealPlanBadge();
+        // Restore plan button states for any pre-planned recipes
+        getMealPlan().forEach(id => updatePlanButton(id));
+
+        // Deep-link: if the URL has a hash pointing to a valid recipe, go there directly.
+        const hash = window.location.hash.slice(1);
+        if (hash && allRecipesData[hash]) {
+          history.replaceState({ recipeId: hash }, '', '#' + hash);
+          _displayRecipe(hash);
+        } else {
+          history.replaceState({ view: 'toc' }, '', window.location.href);
+          document.getElementById('recipe-display').style.display = 'none';
+          document.getElementById('table-of-contents').style.display = 'block';
+        }
+      })
+      .catch((error) => {
+        console.error('[INIT] Fetch failed:', error);
+        if (statusEl) statusEl.textContent = 'Failed to load recipes. Check console for details.';
+      });
+  }
+
+  // =====================
+  // TOC + Rendering
+  // =====================
+  function renderTOC() {
+    const tocContent = document.getElementById('toc-content');
+    tocContent.innerHTML = '';
+    const categories = {};
+    let recipeCounter = 1;
+
+    Object.entries(allRecipesData).forEach(([id, recipe]) => {
+      const category = recipe.category || 'Uncategorized';
+      if (!categories[category]) categories[category] = [];
+      categories[category].push({ id, title: recipe.title });
+    });
+
+    Object.keys(categories).sort().forEach(category => {
+      const categoryDiv = document.createElement('div');
+      categoryDiv.className = 'toc-category';
+
+      // 1. Create a safe ID for the list
+      const listId = 'toc-list-' + category.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+      const title = document.createElement('h3');
+      // 2. Add classes and the onclick handler
+      title.className = 'text-xl font-bold text-stone-800 mt-4 mb-2 border-b pb-1 cursor-pointer hover:text-amber-800 transition-colors';
+      title.textContent = `${category} (${categories[category].length})`;
+      title.setAttribute('onclick', `toggleCategory('${listId}')`);
+      categoryDiv.appendChild(title);
+
+      const ul = document.createElement('ul');
+      
+      // 3. Add ID, shared class, AND the 'hidden' class to start collapsed
+      ul.id = listId;
+      ul.className = 'toc-recipe-list space-y-2 pl-4 hidden'; // 'hidden' added
+
+      // (Alphabetical sort line)
+      categories[category].sort((a, b) => a.title.localeCompare(b.title));
+
+      categories[category].forEach(recipe => {
+        let displayTitle = recipe.title || '';
+        if (displayTitle.length > 70) displayTitle = displayTitle.substring(0, 67) + "...";
+
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <a href="#${recipe.id}"
+             class="text-lg text-amber-700 hover:text-amber-900 hover:underline"
+             onclick="event.preventDefault(); showRecipe('${recipe.id}')">
+            ${recipeCounter++}. ${displayTitle}
+          </a>
+        `;
+        ul.appendChild(li);
+      });
+
+      categoryDiv.appendChild(ul);
+      tocContent.appendChild(categoryDiv);
+    });
+  }
+
+  function populateAllRecipes() {
+    const mainContainer = document.getElementById('recipe-display');
+    mainContainer.innerHTML = '';
+    // Use Object.entries to pass both ID and data, which we need for the carousel
+    Object.entries(allRecipesData).forEach(([recipeId, recipeData]) => {
+      const article = document.createElement('article');
+      article.id = recipeId;
+      mainContainer.appendChild(article);
+      // Pass both ID and data to populateRecipe
+      populateRecipe(recipeId, recipeData);
+    });
+  }
+
+  // Normalize Google Drive links to preview format when possible
+  function normalizeDriveLink(url) {
+    if (!url) return '';
+    try {
+      const m1 = url.match(/\/file\/d\/([^/?]+)/);
+      const m2 = url.match(/[?&]id=([^&]+)/);
+      const fileId = (m1 && m1[1]) || (m2 && m2[1]);
+      if (fileId) return `https://drive.google.com/file/d/${fileId}/preview`;
+      return url;
+    } catch { return url; }
+  }
+
+  function populateRecipe(recipeId, data) {
+    const mainContainer = document.getElementById('recipe-display');
+    let article = document.getElementById(recipeId);
+    if (!article) {
+      article = document.createElement('article');
+      article.id = recipeId;
+      mainContainer.appendChild(article);
+    }
+    article.className = 'recipe-content bg-white p-6 sm:p-8 rounded-lg shadow-md';
+
+    const ingredientsHtml = (data.ingredients || []).map(item => `<li>${item}</li>`).join('');
+    const instructionsHtml = (data.instructions || []).map(line => `<li>${line}</li>`).join('');
+
+    const tipsHtml = (data.tips && data.tips.length)
+      ? `<h4 class="text-xl font-bold mt-6 mb-4 text-stone-800 border-b pb-2">Tips</h4>
+         <ul class="space-y-2 list-disc list-inside text-stone-700">
+           ${data.tips.map(tip => `<li>${tip}</li>`).join('')}
+         </ul>`
+      : '';
+
+    // --- MODIFIED: Check imageLinks array ---
+    const hasImages = data.imageLinks && data.imageLinks.length > 0;
+    const hasMultipleImages = hasImages && data.imageLinks.length > 1;
+
+    const imageButton = hasImages
+      ? `<button id="image-toggle-btn-${recipeId}" 
+                 onclick="toggleRecipeImage('${recipeId}')"
+                 class="ml-4 text-sm text-blue-600 hover:underline">
+           Show Recipe Image
+         </button>`
+      : '';
+
+    const metaHtml = `
+      <div class="recipe-meta">
+        ${data.prepTime ? `<div>Prep: <span>${data.prepTime}</span></div>` : ''}
+        ${data.cookTime ? `<div>Cook: <span>${data.cookTime}</span></div>` : ''}
+        ${data.servings ? `<div>Servings: <span>${data.servings}</span></div>` : ''}
+      </div>
+      ${data.source ? `<div class="text-center text-stone-500 italic">Source: ${data.source}</div>` : ''}
+    `;
+
+    // --- MODIFIED: Build carousel HTML ---
+    let imageCarouselHtml = '';
+    if (hasImages) {
+      const firstImageSrc = normalizeDriveLink(data.imageLinks[0]);
+      
+      const controlsHtml = hasMultipleImages
+        ? `<div class="carousel-controls" data-current-index="0">
+             <button id="prev-btn-${recipeId}" onclick="changeImage('${recipeId}', -1)" class="carousel-btn" disabled>‹ Prev</button>
+             <span id="image-counter-${recipeId}" class="text-sm text-stone-600">Image 1 of ${data.imageLinks.length}</span>
+             <button id="next-btn-${recipeId}" onclick="changeImage('${recipeId}', 1)" class="carousel-btn">Next ›</button>
+           </div>`
+        : '';
+
+      imageCarouselHtml = `
+        <div id="recipe-image-${recipeId}" class="hidden mt-4 border rounded-lg overflow-hidden">
+          ${controlsHtml}
+          <iframe id="image-iframe-${recipeId}"
+                  data-src="${firstImageSrc}"
+                  data-loaded="false"
+                  width="100%" height="500"
+                  class="border-0">
+          </iframe>
+        </div>
+      `;
+    }
+    // --- END MODIFICATION ---
+
+    article.innerHTML = `
+      <header class="border-b border-stone-200 pb-4 mb-6 text-center">
+        <h3 class="text-3xl font-bold text-stone-900">${data.title || ''}</h3>
+        <p class="mt-2 text-stone-600">${data.description || ''}</p>
+        ${metaHtml}
+      </header>
+
+      <div class="grid md:grid-cols-3 gap-8">
+        <div class="md:col-span-1">
+          <h4 class="text-xl font-bold mb-4 text-stone-800 border-b pb-2">Ingredients</h4>
+          <ul class="space-y-2 list-disc list-inside text-stone-700">${ingredientsHtml}</ul>
+        </div>
+        <div class="md:col-span-2">
+          <h4 class="text-xl font-bold mb-4 text-stone-800 border-b pb-2 flex items-center">
+            Instructions ${imageButton}
+          </h4>
+          <ol class="space-y-4 text-stone-700">${instructionsHtml}</ol>
+
+          ${imageCarouselHtml}
+
+          ${tipsHtml}
+        </div>
+      </div>
+
+      <div class="actions-container text-center mt-8 pt-6 border-t flex justify-center items-center gap-4 flex-wrap">
+        <button onclick="window.backToTOC()" class="text-sm text-amber-700 hover:underline">Back to Contents</button>
+        <button id="plan-btn-${recipeId}" onclick="toggleMealPlan('${recipeId}')"
+                class="text-sm px-3 py-1.5 rounded border border-amber-600 text-amber-700 hover:bg-amber-50 transition-colors">
+          + Add to Meal Plan
+        </button>
+        <button onclick="window.screenshotRecipe('${recipeId}')"
+                class="bg-stone-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-stone-700 transition-colors duration-300">
+          📸 Screenshot View
+        </button>
+        <button onclick="window.printRecipe('${recipeId}')"
+                class="bg-amber-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-amber-700 transition-colors duration-300">
+          Print Recipe
+        </button>
+      </div>
+    `;
+  }
+
+  // =====================
+  // Search / TOC Nav / Print
+  // =====================
+  function debouncedSearch() {
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(searchRecipes, 200);
+  }
+
+  function searchRecipes() {
+    const searchInput = document.getElementById('search-input');
+    const searchTerm = (searchInput.value || '').toLowerCase();
+    const categories = document.querySelectorAll('.toc-category');
+    const tocControls = document.getElementById('toc-controls');
+
+    if (!searchTerm) {
+      categories.forEach(category => {
+        category.style.display = '';
+        category.querySelectorAll('li').forEach(item => { item.style.display = ''; });
+      });
+      if (tocControls) tocControls.style.display = 'block';
+      return;
+    }
+
+    if (tocControls) tocControls.style.display = 'none';
+
+    categories.forEach(category => {
+      const listItems = category.querySelectorAll('li');
+      let categoryHasVisibleItems = false;
+      const listElement = category.querySelector('.toc-recipe-list');
+
+      listItems.forEach(item => {
+        const link = item.querySelector('a');
+        const recipeId = link.getAttribute('href').substring(1);
+        const recipeData = allRecipesData[recipeId];
+        if (recipeData) {
+          const searchableText = [
+            recipeData.title,
+            recipeData.description,
+            recipeData.source,
+            ...(recipeData.ingredients || [])
+          ].join(' ').toLowerCase();
+
+          if (searchableText.includes(searchTerm)) {
+            item.style.display = '';
+            categoryHasVisibleItems = true;
+          } else {
+            item.style.display = 'none';
+          }
+        }
+      });
+
+      category.style.display = categoryHasVisibleItems ? '' : 'none';
+      
+      if (listElement && categoryHasVisibleItems) {
+        listElement.classList.remove('hidden');
+      }
+    });
+  }
+
+  // Pure DOM display helpers — no history side effects. Used by both user
+  // actions and the popstate handler so we never double-push history entries.
+  function _displayRecipe(recipeId) {
+    if (!recipeId) return;
+    if (currentRecipeId) {
+      const prev = document.getElementById(currentRecipeId);
+      if (prev) prev.style.display = 'none';
+    }
+    document.getElementById('table-of-contents').style.display = 'none';
+    document.getElementById('recipe-display').style.display = 'block';
+    const recipeArticle = document.getElementById(recipeId);
+    if (recipeArticle) {
+      recipeArticle.style.display = 'block';
+      recipeArticle.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      currentRecipeId = recipeId;
+    }
+    // Show sticky bar with recipe title
+    const bar = document.getElementById('sticky-back-bar');
+    const titleEl = document.getElementById('sticky-recipe-title');
+    if (bar) bar.classList.remove('hidden');
+    if (titleEl) titleEl.textContent = allRecipesData[recipeId]?.title || '';
+  }
+
+  function _displayTOC() {
+    if (currentRecipeId) {
+      const prev = document.getElementById(currentRecipeId);
+      if (prev) prev.style.display = 'none';
+      currentRecipeId = null;
+    }
+    document.getElementById('recipe-display').style.display = 'none';
+    document.getElementById('table-of-contents').style.display = 'block';
+    // Hide sticky bar
+    const bar = document.getElementById('sticky-back-bar');
+    if (bar) bar.classList.add('hidden');
+  }
+
+  function showRecipe(recipeId) {
+    if (!recipeId) return;
+    history.pushState({ recipeId }, '', '#' + recipeId);
+    _displayRecipe(recipeId);
+  }
+
+  function backToTOC() {
+    history.pushState({ view: 'toc' }, '', window.location.pathname + window.location.search);
+    const searchInput = document.getElementById('search-input');
+    if (searchInput && searchInput.value) {
+      searchInput.value = '';
+      searchRecipes();
+    }
+    _displayTOC();
+  }
+
+  window.addEventListener('popstate', (event) => {
+    if (event.state && event.state.recipeId) {
+      _displayRecipe(event.state.recipeId);
+    } else {
+      _displayTOC();
+    }
+  });
+
+  function printRecipe(recipeId) {
+    const data = allRecipesData[recipeId];
+    if (!data) return;
+
+    // Meta line — consolidate prep/cook/servings/source onto one row
+    const metaParts = [];
+    if (data.prepTime)  metaParts.push(`Prep: <strong>${data.prepTime}</strong>`);
+    if (data.cookTime)  metaParts.push(`Cook: <strong>${data.cookTime}</strong>`);
+    if (data.servings)  metaParts.push(`Servings: <strong>${data.servings}</strong>`);
+    if (data.source)    metaParts.push(`Source: <strong>${data.source}</strong>`);
+    const metaHtml = metaParts.length
+      ? `<div class="meta-line">${metaParts.join(' &nbsp;·&nbsp; ')}</div>` : '';
+
+    const descHtml = data.description
+      ? `<p class="description">${data.description}</p>` : '';
+
+    const ingredientsHtml = (data.ingredients || [])
+      .map(item => `<li>${item}</li>`).join('');
+
+    const instructionsHtml = (data.instructions || [])
+      .map(line => `<li>${line}</li>`).join('');
+
+    const tipsHtml = (data.tips && data.tips.length)
+      ? `<div class="tips-block">
+           <div class="section-label">Tips</div>
+           <ul class="tips-list">${data.tips.map(t => `<li>${t}</li>`).join('')}</ul>
+         </div>` : '';
+
+    const printWindow = window.open('', '', 'height=900,width=820');
+    printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${data.title || 'Recipe'}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      font-size: 11pt;
+      color: #1c1917;
+      padding: 0.6in 0.75in 1in;
+    }
+
+    /* ── Header ── */
+    .recipe-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 22pt;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 4pt;
+    }
+    .description {
+      font-size: 9.5pt;
+      font-style: italic;
+      color: #57534e;
+      margin-bottom: 5pt;
+    }
+    .meta-line {
+      font-size: 8.5pt;
+      color: #57534e;
+      border-bottom: 1px solid #d6d3d1;
+      padding-bottom: 7pt;
+      margin-bottom: 14pt;
+    }
+
+    /* ── Two-column body ── */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 2.2fr;
+      gap: 22pt;
+    }
+
+    .section-label {
+      font-family: 'Playfair Display', serif;
+      font-size: 9.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      border-bottom: 1px solid #d6d3d1;
+      padding-bottom: 3pt;
+      margin-bottom: 7pt;
+    }
+
+    /* ── Ingredients — compact, small ── */
+    .ingredients {
+      list-style: none;
+      font-size: 8.5pt;
+      line-height: 1.65;
+    }
+    .ingredients li {
+      padding-left: 9pt;
+      position: relative;
+      margin-bottom: 1pt;
+    }
+    .ingredients li::before {
+      content: '•';
+      position: absolute;
+      left: 0;
+      color: #a8a29e;
+    }
+
+    /* ── Instructions — readable ── */
+    .instructions {
+      list-style: none;
+      counter-reset: step-counter;
+      font-size: 10.5pt;
+      line-height: 1.75;
+    }
+    .instructions li {
+      counter-increment: step-counter;
+      padding-left: 20pt;
+      position: relative;
+      margin-bottom: 7pt;
+    }
+    .instructions li::before {
+      content: counter(step-counter) ".";
+      position: absolute;
+      left: 0;
+      font-weight: 700;
+      color: #78716c;
+    }
+
+    /* ── Tips ── */
+    .tips-block { margin-top: 14pt; }
+    .tips-list {
+      list-style: none;
+      font-size: 9pt;
+      line-height: 1.6;
+    }
+    .tips-list li {
+      padding-left: 12pt;
+      position: relative;
+      margin-bottom: 3pt;
+    }
+    .tips-list li::before { content: '→'; position: absolute; left: 0; color: #a8a29e; }
+
+    /* ── Screen-only footer (visible in the pop-up window before printing) ── */
+    .screen-footer {
+      margin-top: 24pt;
+      border-top: 1px solid #e7e5e4;
+      padding-top: 5pt;
+      display: flex;
+      justify-content: space-between;
+      font-size: 8pt;
+      color: #a8a29e;
+    }
+
+    /* ── Actual print: CSS paged media handles margins/footer ── */
+    @media print {
+      body { padding: 0; }
+      .screen-footer { display: none; }
+      @page {
+        margin: 0.6in 0.75in 0.65in;
+        @bottom-left {
+          content: "katiescookbook.online";
+          font-size: 8pt;
+          color: #a8a29e;
+          font-family: 'Inter', sans-serif;
+        }
+        @bottom-right {
+          content: "Page " counter(page) " of " counter(pages);
+          font-size: 8pt;
+          color: #a8a29e;
+          font-family: 'Inter', sans-serif;
+        }
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1 class="recipe-title">${data.title || ''}</h1>
+  ${descHtml}
+  ${metaHtml}
+
+  <div class="content-grid">
+    <div>
+      <div class="section-label">Ingredients</div>
+      <ul class="ingredients">${ingredientsHtml}</ul>
+    </div>
+    <div>
+      <div class="section-label">Instructions</div>
+      <ul class="instructions">${instructionsHtml}</ul>
+      ${tipsHtml}
+    </div>
+  </div>
+
+  <div class="screen-footer">
+    <span>katiescookbook.online</span>
+    <span>Page 1</span>
+  </div>
+</body>
+</html>`);
+    printWindow.document.close();
+    setTimeout(() => { printWindow.focus(); printWindow.print(); printWindow.close(); }, 600);
+  }
+
+  function screenshotRecipe(recipeId) {
+    const data = allRecipesData[recipeId];
+    if (!data) return;
+
+    const metaParts = [];
+    if (data.prepTime) metaParts.push(`Prep: <strong>${data.prepTime}</strong>`);
+    if (data.cookTime) metaParts.push(`Cook: <strong>${data.cookTime}</strong>`);
+    if (data.servings) metaParts.push(`Servings: <strong>${data.servings}</strong>`);
+    if (data.source)   metaParts.push(`Source: <strong>${data.source}</strong>`);
+    const metaHtml = metaParts.length
+      ? `<div class="meta-line">${metaParts.join(' &nbsp;·&nbsp; ')}</div>` : '';
+
+    const descHtml = data.description
+      ? `<p class="description">${data.description}</p>` : '';
+
+    const ingredientsHtml = (data.ingredients || [])
+      .map(item => `<li>${item}</li>`).join('');
+
+    const instructionsHtml = (data.instructions || [])
+      .map(line => `<li>${line}</li>`).join('');
+
+    const tipsHtml = (data.tips && data.tips.length)
+      ? `<div class="tips-block">
+           <div class="section-label">Tips</div>
+           <ul class="tips-list">${data.tips.map(t => `<li>${t}</li>`).join('')}</ul>
+         </div>` : '';
+
+    const win = window.open('', '', 'height=900,width=480');
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=480">
+  <title>${data.title || 'Recipe'}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      color: #1c1917;
+      background: #fff;
+      padding: 18px 16px 32px;
+      width: 480px;
+    }
+
+    /* ── Header ── */
+    .recipe-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 4px;
+      text-align: center;
+    }
+    .description {
+      font-size: 12px;
+      font-style: italic;
+      color: #57534e;
+      margin-bottom: 4px;
+      text-align: center;
+    }
+    .meta-line {
+      font-size: 11px;
+      color: #57534e;
+      text-align: center;
+      border-bottom: 1px solid #d6d3d1;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+    }
+
+    /* ── Two-column body ── */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 2fr 3fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .section-label {
+      font-family: 'Playfair Display', serif;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1px solid #d6d3d1;
+      padding-bottom: 3px;
+      margin-bottom: 6px;
+    }
+
+    /* ── Ingredients ── */
+    .ingredients {
+      list-style: none;
+      font-size: 11.5px;
+      line-height: 1.6;
+    }
+    .ingredients li {
+      padding-left: 10px;
+      position: relative;
+      margin-bottom: 1px;
+    }
+    .ingredients li::before {
+      content: '•';
+      position: absolute;
+      left: 0;
+      color: #a8a29e;
+    }
+
+    /* ── Instructions ── */
+    .instructions {
+      list-style: none;
+      counter-reset: step-counter;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+    .instructions li {
+      counter-increment: step-counter;
+      padding-left: 18px;
+      position: relative;
+      margin-bottom: 6px;
+    }
+    .instructions li::before {
+      content: counter(step-counter) ".";
+      position: absolute;
+      left: 0;
+      font-weight: 700;
+      color: #78716c;
+    }
+
+    /* ── Tips ── */
+    .tips-block { margin-top: 12px; }
+    .tips-list {
+      list-style: none;
+      font-size: 11px;
+      line-height: 1.6;
+    }
+    .tips-list li {
+      padding-left: 12px;
+      position: relative;
+      margin-bottom: 2px;
+    }
+    .tips-list li::before { content: '→'; position: absolute; left: 0; color: #a8a29e; }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 16px;
+      border-top: 1px solid #e7e5e4;
+      padding-top: 6px;
+      font-size: 10px;
+      color: #a8a29e;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1 class="recipe-title">${data.title || ''}</h1>
+  ${descHtml}
+  ${metaHtml}
+
+  <div class="content-grid">
+    <div>
+      <div class="section-label">Ingredients</div>
+      <ul class="ingredients">${ingredientsHtml}</ul>
+    </div>
+    <div>
+      <div class="section-label">Instructions</div>
+      <ol class="instructions">${instructionsHtml}</ol>
+      ${tipsHtml}
+    </div>
+  </div>
+
+  <div class="footer">katiescookbook.online</div>
+</body>
+</html>`);
+    win.document.close();
+  }
+
+  // =====================
+  // TOC Toggling
+  // =====================
+  function toggleCategory(listId) {
+    const listElement = document.getElementById(listId);
+    if (listElement) {
+      listElement.classList.toggle('hidden');
+    }
+  }
+
+  function toggleAllCategories(shouldExpand) {
+    const allLists = document.querySelectorAll('.toc-recipe-list');
+    allLists.forEach(list => {
+      if (shouldExpand) {
+        list.classList.remove('hidden');
+      } else {
+        list.classList.add('hidden');
+      }
+    });
+  }
+
+  // =====================
+  // Image toggle & Carousel (MODIFIED)
+  // =====================
+  function toggleRecipeImage(recipeId) {
+    const imageDiv = document.getElementById(`recipe-image-${recipeId}`);
+    const button = document.getElementById(`image-toggle-btn-${recipeId}`);
+    if (!imageDiv || !button) return;
+
+    imageDiv.classList.toggle('hidden');
+
+    if (imageDiv.classList.contains('hidden')) {
+      button.textContent = 'Show Recipe Image';
+    } else {
+      button.textContent = 'Close Recipe Image';
+      // Lazy-load: only set src the first time the image is revealed
+      const iframe = document.getElementById(`image-iframe-${recipeId}`);
+      if (iframe && iframe.dataset.src && iframe.dataset.loaded !== 'true') {
+        iframe.src = iframe.dataset.src;
+        iframe.dataset.loaded = 'true';
+      }
+    }
+  }
+
+  // =====================
+  // Meal Planner
+  // =====================
+  const PLAN_KEY = 'katiescookbook_mealplan';
+
+  function getMealPlan() {
+    try { return JSON.parse(localStorage.getItem(PLAN_KEY) || '[]'); } catch { return []; }
+  }
+
+  function saveMealPlan(plan) {
+    localStorage.setItem(PLAN_KEY, JSON.stringify(plan));
+    updateMealPlanBadge();
+  }
+
+  function toggleMealPlan(recipeId) {
+    const plan = getMealPlan();
+    const idx = plan.indexOf(recipeId);
+    if (idx === -1) plan.push(recipeId);
+    else plan.splice(idx, 1);
+    saveMealPlan(plan);
+    updatePlanButton(recipeId);
+  }
+
+  function updateMealPlanBadge() {
+    const plan = getMealPlan();
+    const badge = document.getElementById('meal-plan-badge');
+    if (!badge) return;
+    if (plan.length > 0) {
+      badge.textContent = plan.length;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  }
+
+  function updatePlanButton(recipeId) {
+    const btn = document.getElementById(`plan-btn-${recipeId}`);
+    if (!btn) return;
+    const inPlan = getMealPlan().includes(recipeId);
+    btn.textContent = inPlan ? '✓ In Meal Plan' : '+ Add to Meal Plan';
+    btn.className = inPlan
+      ? 'text-sm px-3 py-1.5 rounded border border-green-600 text-green-700 bg-green-50 transition-colors'
+      : 'text-sm px-3 py-1.5 rounded border border-amber-600 text-amber-700 hover:bg-amber-50 transition-colors';
+  }
+
+  const CHECKED_KEY = 'katiescookbook_checked';
+
+  function getChecked() {
+    try { return JSON.parse(localStorage.getItem(CHECKED_KEY) || '{}'); } catch { return {}; }
+  }
+
+  function saveChecked(checked) {
+    localStorage.setItem(CHECKED_KEY, JSON.stringify(checked));
+  }
+
+  function toggleCheckedItem(recipeId, idx) {
+    const checked = getChecked();
+    const key = `${recipeId}__${idx}`;
+    if (checked[key]) delete checked[key];
+    else checked[key] = true;
+    saveChecked(checked);
+    renderShoppingList();
+  }
+
+  function renderShoppingList() {
+    const plan = getMealPlan();
+    const checked = getChecked();
+    const el = document.getElementById('shopping-list-content');
+    if (!el) return;
+
+    let html = '';
+    plan.forEach(id => {
+      const recipe = allRecipesData[id];
+      if (!recipe?.ingredients?.length) return;
+
+      const unchecked = [], done = [];
+      recipe.ingredients.forEach((ing, idx) => {
+        (checked[`${id}__${idx}`] ? done : unchecked).push({ ing, idx });
+      });
+
+      html += `<div class="mb-4">
+        <p class="text-sm font-semibold text-amber-800 mb-1">${recipe.title}</p>
+        <ul class="space-y-1">`;
+
+      unchecked.forEach(({ ing, idx }) => {
+        html += `<li class="flex items-center gap-2 text-sm text-stone-700">
+          <input type="checkbox" onchange="toggleCheckedItem('${id}', ${idx})"
+                 class="accent-amber-600 cursor-pointer shrink-0">
+          <span>${ing}</span>
+        </li>`;
+      });
+
+      done.forEach(({ ing, idx }) => {
+        html += `<li class="flex items-center gap-2 text-sm text-stone-400">
+          <input type="checkbox" checked onchange="toggleCheckedItem('${id}', ${idx})"
+                 class="accent-amber-600 cursor-pointer shrink-0">
+          <span class="line-through">${ing}</span>
+        </li>`;
+      });
+
+      html += `</ul></div>`;
+    });
+
+    el.innerHTML = html || '<p class="text-stone-400 text-sm">No ingredients to show.</p>';
+  }
+
+  function showMealPlanModal() {
+    const plan = getMealPlan();
+    const contentEl = document.getElementById('meal-plan-content');
+    const modal = document.getElementById('meal-plan-modal');
+    if (!contentEl || !modal) return;
+
+    if (plan.length === 0) {
+      contentEl.innerHTML = '<p class="text-stone-500 text-center py-8">No recipes in your meal plan yet.<br>Open a recipe and click &ldquo;+ Add to Meal Plan&rdquo;.</p>';
+    } else {
+      let html = '<div class="space-y-6">';
+
+      // Planned recipes list
+      html += '<div><h3 class="font-bold text-stone-700 mb-2">Planned Recipes</h3><ul class="space-y-1">';
+      plan.forEach(id => {
+        const recipe = allRecipesData[id];
+        if (!recipe) return;
+        html += `<li class="flex items-center justify-between py-1 border-b border-stone-100">
+          <span class="text-stone-800">${recipe.title}</span>
+          <button onclick="toggleMealPlan('${id}'); showMealPlanModal();"
+                  class="text-xs text-red-500 hover:text-red-700 ml-4 shrink-0">Remove</button>
+        </li>`;
+      });
+      html += '</ul></div>';
+
+      // Shopping list container — populated by renderShoppingList()
+      html += '<div><h3 class="font-bold text-stone-700 mb-2">Shopping List</h3><div id="shopping-list-content"></div></div>';
+      html += '</div>';
+      contentEl.innerHTML = html;
+      renderShoppingList();
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  function closeMealPlanModal() {
+    document.getElementById('meal-plan-modal')?.classList.add('hidden');
+  }
+
+  function clearMealPlan() {
+    const plan = getMealPlan();
+    saveMealPlan([]);
+    saveChecked({});
+    plan.forEach(id => updatePlanButton(id));
+    showMealPlanModal();
+  }
+
+  function copyShoppingList() {
+    const plan = getMealPlan();
+    const checked = getChecked();
+    let text = '';
+
+    plan.forEach(id => {
+      const recipe = allRecipesData[id];
+      if (!recipe?.ingredients?.length) return;
+      const unchecked = recipe.ingredients.filter((_, idx) => !checked[`${id}__${idx}`]);
+      if (!unchecked.length) return;
+      text += `${recipe.title}\n`;
+      unchecked.forEach(ing => { text += `  • ${ing}\n`; });
+      text += '\n';
+    });
+
+    if (!text) {
+      const btn = document.getElementById('copy-shopping-btn');
+      if (btn) { btn.textContent = 'Nothing to copy'; setTimeout(() => btn.textContent = 'Copy Shopping List', 2000); }
+      return;
+    }
+
+    navigator.clipboard.writeText(text.trimEnd()).then(() => {
+      const btn = document.getElementById('copy-shopping-btn');
+      if (btn) { btn.textContent = '✓ Copied!'; setTimeout(() => btn.textContent = 'Copy Shopping List', 2000); }
+    });
+  }
+
+  // =====================
+  // Changelog Modal
+  // =====================
+  function showChangelogModal() {
+    const el = document.getElementById('changelog-content');
+    const modal = document.getElementById('changelog-modal');
+    if (!el || !modal) return;
+
+    el.innerHTML = CHANGELOG.map(entry => `
+      <div class="mb-6">
+        <div class="flex items-baseline gap-3 mb-2">
+          <h3 class="text-lg font-bold text-stone-800">${entry.title}</h3>
+          <span class="text-xs text-stone-400 whitespace-nowrap">${entry.date}</span>
+        </div>
+        <ul class="space-y-1 list-disc list-inside">
+          ${entry.items.map(item => `<li class="text-sm text-stone-700">${item}</li>`).join('')}
+        </ul>
+      </div>
+    `).join('<hr class="border-stone-100 my-4">');
+
+    modal.classList.remove('hidden');
+  }
+
+  function closeChangelogModal() {
+    document.getElementById('changelog-modal')?.classList.add('hidden');
+  }
+
+  // =====================
+  // Random Recipe
+  // =====================
+  let lastRandomCategories = null; // null = no previous selection (use all)
+
+  function showRandomRecipeModal() {
+    const modal = document.getElementById('random-recipe-modal');
+    const contentEl = document.getElementById('random-recipe-categories');
+    if (!modal || !contentEl) return;
+
+    // If recipes haven't loaded yet, show a message instead of an empty list
+    if (Object.keys(allRecipesData).length === 0) {
+      contentEl.innerHTML = '<p class="text-stone-500 text-sm col-span-2">Recipes are still loading — please try again in a moment.</p>';
+      modal.classList.remove('hidden');
+      return;
+    }
+
+    // Build category counts from loaded recipes
+    const categories = {};
+    Object.values(allRecipesData).forEach(recipe => {
+      const cat = recipe.category || 'Uncategorized';
+      categories[cat] = (categories[cat] || 0) + 1;
+    });
+
+    const sortedCats = Object.keys(categories).sort();
+    contentEl.innerHTML = sortedCats.map(cat => {
+      const isChecked = lastRandomCategories === null || lastRandomCategories.has(cat);
+      return `
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" class="random-category-checkbox accent-amber-600" value="${cat}" ${isChecked ? 'checked' : ''}>
+          <span class="text-stone-700 text-sm">${cat} <span class="text-stone-400 text-xs">(${categories[cat]})</span></span>
+        </label>
+      `;
+    }).join('');
+
+    modal.classList.remove('hidden');
+  }
+
+  function closeRandomRecipeModal() {
+    document.getElementById('random-recipe-modal')?.classList.add('hidden');
+  }
+
+  function setAllRandomCategories(checked) {
+    document.querySelectorAll('.random-category-checkbox').forEach(cb => { cb.checked = checked; });
+  }
+
+  function pickRandomRecipe() {
+    const checkboxes = document.querySelectorAll('.random-category-checkbox:checked');
+    const selectedCategories = new Set([...checkboxes].map(cb => cb.value));
+
+    if (selectedCategories.size === 0) {
+      alert('Please select at least one category.');
+      return;
+    }
+
+    const eligible = Object.entries(allRecipesData).filter(([, recipe]) => {
+      const cat = recipe.category || 'Uncategorized';
+      return selectedCategories.has(cat);
+    });
+
+    if (eligible.length === 0) {
+      alert('No recipes found in the selected categories.');
+      return;
+    }
+
+    lastRandomCategories = selectedCategories;
+    const [randomId] = eligible[Math.floor(Math.random() * eligible.length)];
+    closeRandomRecipeModal();
+    showRecipe(randomId);
+  }
+
+  // --- Carousel ---
+  function changeImage(recipeId, direction) {
+    const recipeData = allRecipesData[recipeId];
+    if (!recipeData || !recipeData.imageLinks) return;
+
+    const links = recipeData.imageLinks;
+    const controls = document.querySelector(`#recipe-image-${recipeId} .carousel-controls`);
+    if (!controls) return;
+    
+    let currentIndex = parseInt(controls.dataset.currentIndex || '0');
+    let newIndex = currentIndex + direction;
+
+    // --- Update UI ---
+    const iframe = document.getElementById(`image-iframe-${recipeId}`);
+    const counter = document.getElementById(`image-counter-${recipeId}`);
+    const prevBtn = document.getElementById(`prev-btn-${recipeId}`);
+    const nextBtn = document.getElementById(`next-btn-${recipeId}`);
+
+    // Update iframe src
+    const newSrc = normalizeDriveLink(links[newIndex]);
+    iframe.src = newSrc;
+    
+    // Update counter text
+    counter.textContent = `Image ${newIndex + 1} of ${links.length}`;
+    
+    // Update data attribute
+    controls.dataset.currentIndex = newIndex;
+
+    // Disable/Enable buttons
+    prevBtn.disabled = (newIndex === 0);
+    nextBtn.disabled = (newIndex === links.length - 1);
+  }
+</script>
+</body>
+</html>
