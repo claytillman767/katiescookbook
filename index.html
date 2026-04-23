@@ -8,6 +8,11 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
 
+  <!-- PWA: app identity + home screen install support -->
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#b45309"/>
+  <link rel="apple-touch-icon" href="/icon-192.png"/>
+
   <style>
     body { font-family: 'Inter', sans-serif; }
     h1,h2,h3,h4 { font-family: 'Playfair Display', serif; }
@@ -175,6 +180,13 @@
   // Public (no login) — Init + Data Fetch
   // =====================
 
+  // ── PWA: register service worker for offline caching + install support ──
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+  }
+
   // TODO: After redeploying Code.gs as a JSON API, paste your new deployment URL here.
   const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwpyyev3uTv49rF5ug7SsHlUpW8dkt0ZVZSHyenbxmy5Lo_Xp5zZMqSOmWdYQUupqzX/exec';
 
@@ -184,6 +196,17 @@
   // Entries are newest-first.
   // =====================
   const CHANGELOG = [
+    {
+      date: 'April 22, 2026',
+      title: 'Install as a Phone App (PWA)',
+      items: [
+        'The site can now be installed directly on your phone as an app — no App Store required',
+        'On Android (Chrome): tap the three-dot menu and choose "Add to Home Screen"',
+        'On iPhone (Safari): tap the Share button, then "Add to Home Screen"',
+        'Once installed, the app loads instantly and works even with a weak connection',
+        'Removed the "Screenshot View" button — the installed app handles scroll-capture natively',
+      ]
+    },
     {
       date: 'April 22, 2026',
       title: 'Screenshot View & Random Recipe Button',
@@ -514,10 +537,6 @@
         <button id="plan-btn-${recipeId}" onclick="toggleMealPlan('${recipeId}')"
                 class="text-sm px-3 py-1.5 rounded border border-amber-600 text-amber-700 hover:bg-amber-50 transition-colors">
           + Add to Meal Plan
-        </button>
-        <button onclick="window.screenshotRecipe('${recipeId}')"
-                class="bg-stone-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-stone-700 transition-colors duration-300">
-          📸 Screenshot View
         </button>
         <button onclick="window.printRecipe('${recipeId}')"
                 class="bg-amber-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-amber-700 transition-colors duration-300">
