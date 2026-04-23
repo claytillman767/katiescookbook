@@ -601,6 +601,11 @@
         updateMealPlanBadge();
         // Restore plan button states for any pre-planned recipes
         getMealPlan().forEach(id => updatePlanButton(id));
+        // If auth already resolved before recipes loaded, show cooking log buttons now
+        if (currentUser) {
+          document.querySelectorAll('.cooking-log-btn').forEach(btn => btn.classList.remove('hidden'));
+          refreshAllCookingLogLabels();
+        }
 
         // Deep-link: if the URL has a hash pointing to a valid recipe, go there directly.
         const hash = window.location.hash.slice(1);
