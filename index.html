@@ -13,6 +13,11 @@
   <meta name="theme-color" content="#b45309"/>
   <link rel="apple-touch-icon" href="/icon-192.png"/>
 
+  <!-- Firebase: Authentication + Cloud Sync -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
   <style>
     body { font-family: 'Inter', sans-serif; }
     h1,h2,h3,h4 { font-family: 'Playfair Display', serif; }
@@ -68,6 +73,18 @@
       📋 Meal Plan
       <span id="meal-plan-badge" class="hidden bg-amber-700 text-white rounded-full px-1.5 text-xs font-bold"></span>
     </button>
+    <div class="mt-2 flex justify-center items-center gap-3 flex-wrap">
+      <button id="sign-in-btn" onclick="signIn()"
+              class="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-stone-300 text-stone-700 rounded-full text-sm font-medium hover:bg-stone-50 transition-colors shadow-sm">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-4 h-4" alt="Google">
+        Sign in with Google
+      </button>
+      <div id="user-info" class="hidden inline-flex items-center gap-2">
+        <img id="user-avatar" src="" alt="" class="w-6 h-6 rounded-full border border-stone-200">
+        <span id="user-name" class="text-sm text-stone-600"></span>
+        <button onclick="signOut()" class="text-xs text-stone-400 hover:text-stone-600 hover:underline ml-1">Sign out</button>
+      </div>
+    </div>
   </header>
 
   <div class="mb-10">
@@ -191,11 +208,95 @@
   const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwpyyev3uTv49rF5ug7SsHlUpW8dkt0ZVZSHyenbxmy5Lo_Xp5zZMqSOmWdYQUupqzX/exec';
 
   // =====================
+  // Firebase: Auth + Firestore
+  // =====================
+  firebase.initializeApp({
+    apiKey: "AIzaSyDwE4FQFSq0LQaesvo9X1n87hHm86Nb8vg",
+    authDomain: "katiescookbook-4079c.firebaseapp.com",
+    projectId: "katiescookbook-4079c",
+    storageBucket: "katiescookbook-4079c.firebasestorage.app",
+    messagingSenderId: "857996971699",
+    appId: "1:857996971699:web:dd57299b38843a97a1eac6"
+  });
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+  let currentUser = null;
+
+  // Called automatically whenever sign-in state changes (on page load, sign-in, sign-out)
+  auth.onAuthStateChanged(async (user) => {
+    currentUser = user;
+    updateAuthUI(user);
+    if (user) {
+      await loadMealPlanFromFirestore(user.uid);
+      updateMealPlanBadge();
+      getMealPlan().forEach(id => updatePlanButton(id));
+    }
+  });
+
+  function signIn() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).catch(err => console.error('Sign-in error:', err));
+  }
+
+  function signOut() {
+    auth.signOut().catch(err => console.error('Sign-out error:', err));
+  }
+
+  function updateAuthUI(user) {
+    const signInBtn = document.getElementById('sign-in-btn');
+    const userInfo = document.getElementById('user-info');
+    const userAvatar = document.getElementById('user-avatar');
+    const userNameEl = document.getElementById('user-name');
+    if (!signInBtn || !userInfo) return;
+    if (user) {
+      signInBtn.classList.add('hidden');
+      userInfo.classList.remove('hidden');
+      if (userAvatar && user.photoURL) userAvatar.src = user.photoURL;
+      if (userNameEl) userNameEl.textContent = user.displayName || user.email;
+    } else {
+      signInBtn.classList.remove('hidden');
+      userInfo.classList.add('hidden');
+    }
+  }
+
+  // Loads this user's meal plan from Firestore and overwrites localStorage
+  async function loadMealPlanFromFirestore(uid) {
+    try {
+      const doc = await db.collection('mealplans').doc(uid).get();
+      if (doc.exists) {
+        const data = doc.data();
+        localStorage.setItem(PLAN_KEY, JSON.stringify(data.recipes || []));
+        localStorage.setItem(CHECKED_KEY, JSON.stringify(data.checked || {}));
+      }
+    } catch (e) {
+      console.error('Failed to load meal plan from Firestore:', e);
+    }
+  }
+
+  // Writes the current meal plan to Firestore (fire-and-forget)
+  function saveMealPlanToFirestore(plan, checked) {
+    if (!currentUser) return;
+    db.collection('mealplans').doc(currentUser.uid).set({
+      recipes: plan,
+      checked: checked
+    }).catch(e => console.error('Failed to save to Firestore:', e));
+  }
+
+  // =====================
   // Change Log Data
   // Update this array (and CHANGELOG.md) whenever changes are made to the site.
   // Entries are newest-first.
   // =====================
   const CHANGELOG = [
+    {
+      date: 'April 23, 2026',
+      title: 'Sign in with Google + Synced Meal Plan',
+      items: [
+        'Added "Sign in with Google" button to the header — anyone can sign in with their Google account',
+        'When signed in, your meal plan syncs to the cloud and works across all your devices',
+        'When not signed in, the meal plan continues to work as before (saved on your device)',
+      ]
+    },
     {
       date: 'April 22, 2026',
       title: 'Install as a Phone App (PWA)',
@@ -1095,6 +1196,7 @@
   function saveMealPlan(plan) {
     localStorage.setItem(PLAN_KEY, JSON.stringify(plan));
     updateMealPlanBadge();
+    saveMealPlanToFirestore(plan, getChecked());
   }
 
   function toggleMealPlan(recipeId) {
@@ -1136,6 +1238,7 @@
 
   function saveChecked(checked) {
     localStorage.setItem(CHECKED_KEY, JSON.stringify(checked));
+    saveMealPlanToFirestore(getMealPlan(), checked);
   }
 
   function toggleCheckedItem(recipeId, idx) {

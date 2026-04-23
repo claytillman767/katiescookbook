@@ -3,7 +3,7 @@
 // Caches the app shell so it loads instantly and works offline.
 // =====================
 
-const CACHE_NAME = 'katiescookbook-v2';
+const CACHE_NAME = 'katiescookbook-v3';
 
 // Files that make up the app shell — cached on first install.
 // The recipe data itself is fetched live from Google Apps Script each time,
@@ -44,8 +44,14 @@ self.addEventListener('activate', event => {
 
 // ── Fetch: serve from cache, fall back to network ─────────────────────────
 self.addEventListener('fetch', event => {
-  // Don't intercept the Google Apps Script API call — it must always be live.
-  if (event.request.url.includes('script.google.com')) {
+  // Don't intercept live API calls — these must always go to the network.
+  const url = event.request.url;
+  if (
+    url.includes('script.google.com') ||
+    url.includes('firestore.googleapis.com') ||
+    url.includes('identitytoolkit.googleapis.com') ||
+    url.includes('securetoken.googleapis.com')
+  ) {
     return;
   }
 
