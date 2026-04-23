@@ -65,7 +65,20 @@
 
 <div class="container mx-auto max-w-4xl p-4 sm:p-8">
 
-  <header class="text-center mb-6 border-b-2 border-stone-300 pb-6">
+  <header class="relative text-center mb-6 border-b-2 border-stone-300 pb-6">
+    <!-- Auth UI — top right corner -->
+    <div class="absolute top-0 right-0 flex items-center gap-2">
+      <button id="sign-in-btn" onclick="signIn()"
+              class="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-stone-300 text-stone-700 rounded-full text-sm font-medium hover:bg-stone-50 transition-colors shadow-sm">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-4 h-4" alt="Google">
+        Sign in with Google
+      </button>
+      <div id="user-info" class="hidden items-center gap-2">
+        <img id="user-avatar" src="" alt="" class="w-7 h-7 rounded-full border border-stone-200">
+        <span id="user-name" class="text-sm text-stone-600 hidden sm:inline"></span>
+        <button onclick="signOut()" class="text-xs text-stone-400 hover:text-stone-600 hover:underline">Sign out</button>
+      </div>
+    </div>
     <h1 class="text-4xl sm:text-5xl font-bold text-stone-900">Katie's Cookbook</h1>
     <p class="text-stone-600 mt-2">🦔 A collection of personal favorites.</p>
     <button onclick="showMealPlanModal()"
@@ -73,18 +86,6 @@
       📋 Meal Plan
       <span id="meal-plan-badge" class="hidden bg-amber-700 text-white rounded-full px-1.5 text-xs font-bold"></span>
     </button>
-    <div class="mt-2 flex justify-center items-center gap-3 flex-wrap">
-      <button id="sign-in-btn" onclick="signIn()"
-              class="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-stone-300 text-stone-700 rounded-full text-sm font-medium hover:bg-stone-50 transition-colors shadow-sm">
-        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-4 h-4" alt="Google">
-        Sign in with Google
-      </button>
-      <div id="user-info" class="hidden inline-flex items-center gap-2">
-        <img id="user-avatar" src="" alt="" class="w-6 h-6 rounded-full border border-stone-200">
-        <span id="user-name" class="text-sm text-stone-600"></span>
-        <button onclick="signOut()" class="text-xs text-stone-400 hover:text-stone-600 hover:underline ml-1">Sign out</button>
-      </div>
-    </div>
   </header>
 
   <div class="mb-10">
@@ -176,6 +177,36 @@
     </div>
   </div>
 
+  <!-- Cooking Log Modal -->
+  <div id="cooking-log-modal" class="hidden fixed inset-0 z-50 flex items-start justify-center pt-16 px-4">
+    <div class="absolute inset-0 bg-black/50" onclick="closeCookingLogModal()"></div>
+    <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] overflow-y-auto p-6">
+      <div class="flex items-center justify-between mb-1">
+        <h2 class="text-2xl font-bold">📅 Cooking Log</h2>
+        <button onclick="closeCookingLogModal()" class="text-stone-400 hover:text-stone-700 text-3xl leading-none">&times;</button>
+      </div>
+      <p id="cooking-log-recipe-title" class="text-sm text-stone-500 mb-4"></p>
+
+      <!-- Add entry form -->
+      <div class="border rounded-lg p-4 bg-stone-50 mb-5">
+        <label class="block text-sm font-medium text-stone-700 mb-1">Date cooked</label>
+        <input type="date" id="cooking-log-date"
+               class="w-full border border-stone-300 rounded px-3 py-1.5 text-sm mb-3 focus:outline-none focus:ring-1 focus:ring-amber-500">
+        <label class="block text-sm font-medium text-stone-700 mb-1">Notes / feedback <span class="text-stone-400 font-normal">(optional)</span></label>
+        <textarea id="cooking-log-notes" rows="3"
+                  placeholder="How did it turn out? Any tweaks you'd make?"
+                  class="w-full border border-stone-300 rounded px-3 py-1.5 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-amber-500"></textarea>
+        <button onclick="saveCookingEntry()"
+                class="mt-3 w-full bg-amber-600 text-white rounded-lg py-2 text-sm font-semibold hover:bg-amber-700 transition-colors">
+          Save Entry
+        </button>
+      </div>
+
+      <!-- Past entries -->
+      <div id="cooking-log-entries"></div>
+    </div>
+  </div>
+
   <footer class="text-center mt-10 mb-4 text-sm text-stone-500 space-y-1">
     <div>
       <a href="https://forms.gle/UvTKwMtEumBYzZit6" target="_blank" rel="noopener noreferrer"
@@ -227,9 +258,13 @@
     currentUser = user;
     updateAuthUI(user);
     if (user) {
-      await loadMealPlanFromFirestore(user.uid);
+      await Promise.all([
+        loadMealPlanFromFirestore(user.uid),
+        loadCookingLog(user.uid),
+      ]);
       updateMealPlanBadge();
       getMealPlan().forEach(id => updatePlanButton(id));
+      refreshAllCookingLogLabels();
     }
   });
 
@@ -251,11 +286,16 @@
     if (user) {
       signInBtn.classList.add('hidden');
       userInfo.classList.remove('hidden');
+      userInfo.classList.add('flex');
       if (userAvatar && user.photoURL) userAvatar.src = user.photoURL;
       if (userNameEl) userNameEl.textContent = user.displayName || user.email;
+      document.querySelectorAll('.cooking-log-btn').forEach(btn => btn.classList.remove('hidden'));
     } else {
       signInBtn.classList.remove('hidden');
       userInfo.classList.add('hidden');
+      userInfo.classList.remove('flex');
+      document.querySelectorAll('.cooking-log-btn').forEach(btn => btn.classList.add('hidden'));
+      cookingLogData = {};
     }
   }
 
@@ -283,11 +323,132 @@
   }
 
   // =====================
+  // Cooking Log (Firestore)
+  // Stored at cookingLog/{uid} as a map of { [recipeId]: [{date, notes}, ...] }
+  // Only available when signed in.
+  // =====================
+  let cookingLogData = {};
+  let cookingLogCurrentRecipeId = null;
+
+  async function loadCookingLog(uid) {
+    try {
+      const doc = await db.collection('cookingLog').doc(uid).get();
+      cookingLogData = doc.exists ? (doc.data() || {}) : {};
+    } catch (e) {
+      console.error('Failed to load cooking log:', e);
+      cookingLogData = {};
+    }
+  }
+
+  async function saveCookingEntry() {
+    if (!currentUser || !cookingLogCurrentRecipeId) return;
+    const date = document.getElementById('cooking-log-date').value;
+    const notes = document.getElementById('cooking-log-notes').value.trim();
+    if (!date) { alert('Please select a date.'); return; }
+
+    const recipeId = cookingLogCurrentRecipeId;
+    if (!cookingLogData[recipeId]) cookingLogData[recipeId] = [];
+    cookingLogData[recipeId].unshift({ date, notes });
+
+    try {
+      await db.collection('cookingLog').doc(currentUser.uid).set(cookingLogData);
+      document.getElementById('cooking-log-notes').value = '';
+      renderCookingLogEntries();
+      updateCookingLogLabel(recipeId);
+    } catch (e) {
+      console.error('Failed to save cooking entry:', e);
+      alert('Could not save. Please try again.');
+      cookingLogData[recipeId].shift(); // rollback
+    }
+  }
+
+  async function deleteCookingEntry(index) {
+    if (!currentUser || !cookingLogCurrentRecipeId) return;
+    cookingLogData[cookingLogCurrentRecipeId].splice(index, 1);
+    try {
+      await db.collection('cookingLog').doc(currentUser.uid).set(cookingLogData);
+      renderCookingLogEntries();
+      updateCookingLogLabel(cookingLogCurrentRecipeId);
+    } catch (e) {
+      console.error('Failed to delete cooking entry:', e);
+    }
+  }
+
+  function showCookingLogModal(recipeId) {
+    if (!currentUser) return;
+    cookingLogCurrentRecipeId = recipeId;
+    const recipe = allRecipesData[recipeId];
+    document.getElementById('cooking-log-recipe-title').textContent = recipe ? recipe.title : '';
+    document.getElementById('cooking-log-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('cooking-log-notes').value = '';
+    renderCookingLogEntries();
+    document.getElementById('cooking-log-modal').classList.remove('hidden');
+  }
+
+  function closeCookingLogModal() {
+    document.getElementById('cooking-log-modal').classList.add('hidden');
+    cookingLogCurrentRecipeId = null;
+  }
+
+  function renderCookingLogEntries() {
+    const container = document.getElementById('cooking-log-entries');
+    const entries = cookingLogData[cookingLogCurrentRecipeId] || [];
+    if (entries.length === 0) {
+      container.innerHTML = '<p class="text-sm text-stone-400 text-center py-2">No entries yet — save your first one above!</p>';
+      return;
+    }
+    container.innerHTML = `
+      <h3 class="text-sm font-semibold text-stone-600 mb-2">Past cooking sessions (${entries.length})</h3>
+      ${entries.map((e, i) => `
+        <div class="border-b border-stone-100 py-3 last:border-0">
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-semibold text-stone-700">${formatCookDate(e.date)}</span>
+            <button onclick="deleteCookingEntry(${i})" class="text-xs text-stone-300 hover:text-red-400 transition-colors">Remove</button>
+          </div>
+          ${e.notes ? `<p class="text-sm text-stone-500 mt-1">${cookingLogEscapeHtml(e.notes)}</p>` : '<p class="text-xs text-stone-300 mt-1 italic">No notes</p>'}
+        </div>
+      `).join('')}
+    `;
+  }
+
+  function updateCookingLogLabel(recipeId) {
+    const btn = document.getElementById(`cook-log-btn-${recipeId}`);
+    if (!btn) return;
+    const count = (cookingLogData[recipeId] || []).length;
+    btn.textContent = count > 0 ? `📅 Cooked (${count})` : '📅 Cooking Log';
+  }
+
+  function refreshAllCookingLogLabels() {
+    Object.keys(cookingLogData).forEach(recipeId => updateCookingLogLabel(recipeId));
+  }
+
+  function formatCookDate(dateStr) {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${months[parseInt(m) - 1]} ${parseInt(d)}, ${y}`;
+  }
+
+  function cookingLogEscapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // =====================
   // Change Log Data
   // Update this array (and CHANGELOG.md) whenever changes are made to the site.
   // Entries are newest-first.
   // =====================
   const CHANGELOG = [
+    {
+      date: 'April 23, 2026',
+      title: 'Cooking Log',
+      items: [
+        'Added a "📅 Cooking Log" button on every recipe (visible when signed in)',
+        'Log the date you cooked a recipe and leave notes or feedback',
+        'Past cooking sessions are listed in the log, newest first',
+        'Cooking history is saved to your account and syncs across all your devices',
+      ]
+    },
     {
       date: 'April 23, 2026',
       title: 'Sign in with Google + Synced Meal Plan',
@@ -638,6 +799,10 @@
         <button id="plan-btn-${recipeId}" onclick="toggleMealPlan('${recipeId}')"
                 class="text-sm px-3 py-1.5 rounded border border-amber-600 text-amber-700 hover:bg-amber-50 transition-colors">
           + Add to Meal Plan
+        </button>
+        <button id="cook-log-btn-${recipeId}" onclick="showCookingLogModal('${recipeId}')"
+                class="cooking-log-btn hidden text-sm px-3 py-1.5 rounded border border-stone-400 text-stone-600 hover:bg-stone-50 transition-colors">
+          📅 Cooking Log
         </button>
         <button onclick="window.printRecipe('${recipeId}')"
                 class="bg-amber-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-amber-700 transition-colors duration-300">
