@@ -3,14 +3,14 @@
 // Caches the app shell so it loads instantly and works offline.
 // =====================
 
-const CACHE_NAME = 'katiescookbook-v3';
+const CACHE_NAME = 'katiescookbook-v4';
 
 // Files that make up the app shell — cached on first install.
 // The recipe data itself is fetched live from Google Apps Script each time,
 // so it is NOT in this list (it changes too often to cache reliably).
 const APP_SHELL = [
-  '/',
-  '/index.html',
+  './',
+  './index.html',
   'https://cdn.tailwindcss.com',
   'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@400;600&display=swap',
 ];

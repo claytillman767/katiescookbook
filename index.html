@@ -9,9 +9,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
 
   <!-- PWA: app identity + home screen install support -->
-  <link rel="manifest" href="/manifest.json"/>
+  <link rel="manifest" href="manifest.json"/>
   <meta name="theme-color" content="#b45309"/>
-  <link rel="apple-touch-icon" href="/icon-192.png"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
 
   <!-- Firebase: Authentication + Cloud Sync -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -231,7 +231,7 @@
   // ── PWA: register service worker for offline caching + install support ──
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('sw.js').catch(() => {});
     });
   }
 
@@ -439,6 +439,14 @@
   // Entries are newest-first.
   // =====================
   const CHANGELOG = [
+    {
+      date: 'October 1, 2026',
+      title: 'New Web Address',
+      items: [
+        'The cookbook has moved to claytillman767.github.io/katiescookbook',
+        'If you installed the app on your phone, remove it and add it to your home screen again from the new address'
+      ]
+    },
     {
       date: 'April 23, 2026',
       title: 'Cooking Log',
@@ -1091,7 +1099,7 @@
       @page {
         margin: 0.6in 0.75in 0.65in;
         @bottom-left {
-          content: "katiescookbook.online";
+          content: "claytillman767.github.io/katiescookbook";
           font-size: 8pt;
           color: #a8a29e;
           font-family: 'Inter', sans-serif;
@@ -1124,7 +1132,7 @@
   </div>
 
   <div class="screen-footer">
-    <span>katiescookbook.online</span>
+    <span>claytillman767.github.io/katiescookbook</span>
     <span>Page 1</span>
   </div>
 </body>
@@ -1304,7 +1312,7 @@
     </div>
   </div>
 
-  <div class="footer">katiescookbook.online</div>
+  <div class="footer">claytillman767.github.io/katiescookbook</div>
 </body>
 </html>`);
     win.document.close();
